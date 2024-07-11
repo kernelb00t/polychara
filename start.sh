@@ -25,7 +25,7 @@ check_sudo() {
     fi
 }
 
-if $(sudo apt >/dev/null) -ne 0; then
+if [[ $(sudo apt >/dev/null) -ne 0 ]]; then
     echo "This script must be run with a user with at least sudo privileges."
     echo "Please make sure you have the required permissions to install packages."
     exit 1
@@ -41,6 +41,7 @@ case "$ID" in
         echo "Detected Debian-based OS, checking Python3..."
         if ! dpkg -l | grep -q python3; then
             echo "Python 3 not found/not installed with Apt. Installing..."
+            check_sudo apt
             sudo apt update
             sudo apt install -y python3
         else
@@ -50,8 +51,15 @@ case "$ID" in
     centos|fedora)
         echo "Detected RedHat-based OS, checking Python3..."
         if ! rpm -q python3; then
-            echo "Python 3 not found/not installed with Yum. Installing..."
-            sudo yum install -y python3
+            if $(command -v dnf >/dev/null); then
+                echo "Python 3 not found/not installed with DNF. Installing..."
+                check_sudo dnf
+                sudo dnf install -y python3
+            else
+                echo "Python 3 not found/not installed with Yum. Installing..."
+                check_sudo yum
+                sudo yum install -y python3
+            fi
         else
             echo "A Python 3 installation was found. We can go ahead."
         fi
@@ -65,9 +73,19 @@ esac
 
 # Now we will create a Venv and install the required packages.
 echo "Creating a Python Virtual Environment..."
-python3 -m venv venv
+if [ -d "venv" ]; then
+    echo "A Python Virtual Environment already exists. Remove it? [y/N]"
+    read -r response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        rm -rf venv
+        python3 -m venv venv
+    else
+        echo "Continuing with the existing Virtual Environment."
+    fi
+else
+    python3 -m venv venv
+fi
 source venv/bin/activate
 echo "Installing required Python packages..."
 pip install -r requirements.txt
-echo "Done! You can start the installer with 'python3 main.py'."
-
+/usr/bin/env python3 main.py install
